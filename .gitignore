@@ -21,6 +21,7 @@ ainews_design.db
 .env
 .env.local
 appsettings.local.json
+appsettings.Development.json
 
 ## Claude Code local settings
 .claude/
