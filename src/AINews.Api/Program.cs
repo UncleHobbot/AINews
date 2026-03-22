@@ -46,8 +46,8 @@ builder.Services.AddAuthentication(opt =>
 })
 .AddGoogle(opt =>
 {
-    opt.ClientId = builder.Configuration["Google:ClientId"] ?? "placeholder";
-    opt.ClientSecret = builder.Configuration["Google:ClientSecret"] ?? "placeholder";
+    opt.ClientId = builder.Configuration["Google:ClientId"].NullIfEmpty() ?? "placeholder";
+    opt.ClientSecret = builder.Configuration["Google:ClientSecret"].NullIfEmpty() ?? "placeholder";
     opt.SaveTokens = false;
     opt.CallbackPath = "/api/auth/callback/google";
 });
