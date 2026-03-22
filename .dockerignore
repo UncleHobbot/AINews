@@ -1,0 +1,9 @@
+**/.git
+**/.vs
+**/node_modules
+**/bin
+**/obj
+**/.env
+src/AINews.Frontend/dist
+tasks/
+*.md

@@ -1,0 +1,26 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+*.suo
+
+## Node
+node_modules/
+src/AINews.Frontend/dist/
+
+## Local dev data
+local-data/
+local-keys/
+local-logs/
+src/AINews.Api/data/
+src/AINews.Api/keys/
+ainews_design.db
+
+## Env
+.env
+.env.local
+appsettings.local.json
+
+## Claude Code local settings
+.claude/

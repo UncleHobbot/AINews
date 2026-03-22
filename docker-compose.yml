@@ -1,0 +1,15 @@
+services:
+  ainews:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./local-data:/app/data
+      - ./local-keys:/app/keys
+      - ./local-logs:/app/logs
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - AllowedEmails__0=your@email.com
+      - Google__ClientId=your-google-client-id
+      - Google__ClientSecret=your-google-client-secret
+    restart: unless-stopped
