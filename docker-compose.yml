@@ -9,7 +9,7 @@ services:
       - ./local-logs:/app/logs
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - AllowedEmails__0=your@email.com
-      - Google__ClientId=your-google-client-id
-      - Google__ClientSecret=your-google-client-secret
+      - AllowedEmails__0=${ALLOWED_EMAIL}
+      - Google__ClientId=${GOOGLE_CLIENT_ID}
+      - Google__ClientSecret=${GOOGLE_CLIENT_SECRET}
     restart: unless-stopped
