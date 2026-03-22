@@ -11,14 +11,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Data Protection (persisted to volume in production)
 var keysPath = builder.Configuration["DataProtection:KeyPath"]
-    ?? Path.Combine(builder.Environment.ContentRootPath, "keys");
+    .NullIfEmpty() ?? Path.Combine(builder.Environment.ContentRootPath, "keys");
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
     .SetApplicationName("AINews");
 
 // Database
 var dbPath = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "data", "ainews.db")}";
+    .NullIfEmpty() ?? $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "data", "ainews.db")}";
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseSqlite(dbPath));
 
 // Authentication
@@ -100,3 +100,8 @@ app.MapHub<ScanProgressHub>("/hubs/scan");
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+static class StringExtensions
+{
+    public static string? NullIfEmpty(this string? s) => string.IsNullOrEmpty(s) ? null : s;
+}
