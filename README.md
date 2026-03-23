@@ -6,6 +6,7 @@ A personal AI-powered news aggregator that monitors Reddit subreddits and X.com 
 
 - **Reddit & X.com monitoring** — scan subreddits and keyword searches for new posts since the last run
 - **AI extraction** — summarizes posts, identifies links (GitHub repos, YouTube videos, articles, docs), and summarizes linked content
+- **Feedback learning** — thumb up/down on articles; disliked items are hidden and feedback history is used to teach the AI your preferences
 - **Z.ai + OpenAI** — uses Z.ai as the primary AI provider with OpenAI as fallback
 - **Real-time progress** — "Scan Now" button with live SignalR progress updates
 - **Topic & source management** — organize sources into topics, enable/disable individually
@@ -29,45 +30,59 @@ A personal AI-powered news aggregator that monitors Reddit subreddits and X.com 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [Node.js 20+](https://nodejs.org/)
 - Google OAuth credentials ([console.cloud.google.com](https://console.cloud.google.com))
-- Reddit API app ([reddit.com/prefs/apps](https://www.reddit.com/prefs/apps)) — script type, app-only auth
-- X Developer account with Bearer Token ([developer.twitter.com](https://developer.twitter.com)) — Free tier works (1 search/15 min)
+- Reddit API app ([reddit.com/prefs/apps](https://www.reddit.com/prefs/apps)) — script type, requires API access approval
+- X.com account (browser session cookies — no developer account needed)
 - Z.ai API key and/or OpenAI API key
 
 ### Running locally
 
-**1. Start the API:**
-```bash
-cd src/AINews.Api
-dotnet run
-# API starts at http://localhost:5000
-```
-
-**2. Start the frontend (separate terminal):**
-```bash
-cd src/AINews.Frontend
-npm install
-npm run dev
-# App available at http://localhost:5173
-```
-
-**3. Configure your Google OAuth credentials** in `src/AINews.Api/appsettings.json`:
+**1. Configure Google OAuth** in `src/AINews.Api/appsettings.Development.json` (create if absent, gitignored):
 ```json
 {
   "AllowedEmails": ["your@gmail.com"],
   "Google": {
     "ClientId": "your-client-id",
     "ClientSecret": "your-client-secret"
-  }
+  },
+  "FrontendBaseUrl": "http://localhost:5173"
 }
 ```
-Set the OAuth callback URL in Google Console to `http://localhost:5000/api/auth/callback/google`.
+Add `http://localhost:5230/api/auth/callback/google` as an authorized redirect URI in Google Console.
+
+**2. Start the API (Terminal 1):**
+```bash
+cd src/AINews.Api
+dotnet run
+# API starts at http://localhost:5230
+```
+
+**3. Start the frontend (Terminal 2):**
+```bash
+cd src/AINews.Frontend
+npm install
+npm run dev
+# App at http://localhost:5173
+```
+
+Or use the helper scripts at the project root: `run-api.bat` / `run-fe.bat` (Windows).
 
 **4. After first login**, go to **Settings** to enter:
 - Reddit Client ID & Secret → then click **Connect Reddit Account**
-- X Bearer Token
-- Z.ai API Key & Base URL (and/or OpenAI API Key)
+- X Auth Token (`auth_token` cookie) and X CSRF Token (`ct0` cookie) — see below
+- Z.ai API Key & Base URL (`https://api.z.ai/v1`) and/or OpenAI API Key
 
 **5. Add topics and sources**, then click **Scan Now**.
+
+### X.com Setup (no developer account needed)
+
+Instead of the official API, AINews uses X.com's internal web API via your browser session:
+
+1. Log into [x.com](https://x.com) in your browser
+2. Open DevTools → **Application** → **Cookies** → `https://x.com`
+3. Copy the **`auth_token`** value → paste into Settings → "X Auth Token"
+4. Copy the **`ct0`** value → paste into Settings → "X CSRF Token"
+
+These tokens are long-lived. When they expire, the scan will skip X sources and log a warning — just re-extract them.
 
 ### Docker (Synology NAS or any Docker host)
 
@@ -80,12 +95,11 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 docker compose up --build
 ```
 
-Edit `docker-compose.yml` to set your email and Google credentials before running:
-```yaml
-environment:
-  - AllowedEmails__0=your@gmail.com
-  - Google__ClientId=your-google-client-id
-  - Google__ClientSecret=your-google-client-secret
+Copy `.env.example` to `.env` and fill in your values before running:
+```
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+ALLOWED_EMAIL=your@gmail.com
 ```
 
 Set the OAuth callback URL in Google Console to `http://<nas-ip>:8080/api/auth/callback/google`.
@@ -108,16 +122,8 @@ All API keys are stored encrypted in the database after first login via the **Se
 |---|---|---|
 | `Google:ClientId` / `Google:ClientSecret` | Config / env | Required at startup for OAuth |
 | `AllowedEmails` | Config / env | List of emails allowed to log in |
+| `FrontendBaseUrl` | Config | Dev only — redirect target after login (e.g. `http://localhost:5173`) |
 | `DataProtection:KeyPath` | Config / env | Override key ring directory (default: `<root>/keys`) |
 | `ConnectionStrings:DefaultConnection` | Config / env | SQLite path (default: `<root>/data/ainews.db`) |
 
 All other keys (Reddit, X, Z.ai, OpenAI) are configured via the Settings UI after login.
-
-## X API Rate Limits
-
-The X (Twitter) Free tier allows approximately **1 search request per 15 minutes**. The app automatically:
-- Batches all keyword queries into a single OR compound request
-- Tracks the last search time and enforces the cooldown
-- Displays the remaining cooldown in the scan status
-
-Consider upgrading to the Basic tier ($100/month) for 10M tweets/month if you need more frequent scans.
