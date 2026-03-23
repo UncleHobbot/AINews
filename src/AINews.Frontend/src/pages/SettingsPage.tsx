@@ -1,16 +1,12 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { settingsApi } from '../api/settings'
 import { topicsApi } from '../api/topics'
 import { Save, Plus, Trash2, Loader2, Eye, EyeOff } from 'lucide-react'
-import { useMutation as useM, useQueryClient } from '@tanstack/react-query'
-import { topicsApi as ta } from '../api/topics'
 
 const SETTING_LABELS: Record<string, string> = {
   'Google:ClientId': 'Google Client ID',
   'Google:ClientSecret': 'Google Client Secret',
-  'Reddit:ClientId': 'Reddit Client ID',
-  'Reddit:ClientSecret': 'Reddit Client Secret',
   'X:AuthToken': 'X Auth Token (auth_token cookie)',
   'X:CsrfToken': 'X CSRF Token (ct0 cookie)',
   'ZAi:ApiKey': 'Z.ai API Key',
@@ -39,8 +35,8 @@ export function SettingsPage() {
     },
   })
 
-  const createTopicMutation = useM({
-    mutationFn: () => ta.create({ name: topicForm.name, description: topicForm.description || undefined }),
+  const createTopicMutation = useMutation({
+    mutationFn: () => topicsApi.create({ name: topicForm.name, description: topicForm.description || undefined }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['topics'] })
       setTopicForm({ name: '', description: '' })
@@ -48,16 +44,9 @@ export function SettingsPage() {
     },
   })
 
-  const deleteTopicMutation = useM({
-    mutationFn: ta.delete,
+  const deleteTopicMutation = useMutation({
+    mutationFn: topicsApi.delete,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['topics'] }),
-  })
-
-  const redditConnectMutation = useMutation({
-    mutationFn: async () => {
-      const { authUrl } = await settingsApi.redditAuthUrl()
-      window.location.href = authUrl
-    },
   })
 
   const settingKeys = Object.keys(SETTING_LABELS)
@@ -123,21 +112,6 @@ export function SettingsPage() {
             </div>
           </div>
         )}
-      </section>
-
-      {/* Reddit OAuth */}
-      <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">Reddit Connection</h2>
-        <p className="text-sm text-gray-500">
-          Connect your Reddit account to access subreddits. Requires Reddit Client ID/Secret to be set above first.
-        </p>
-        <button
-          onClick={() => redditConnectMutation.mutate()}
-          disabled={redditConnectMutation.isPending}
-          className="px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-60"
-        >
-          {redditConnectMutation.isPending ? 'Redirecting…' : 'Connect Reddit Account'}
-        </button>
       </section>
 
       {/* Topics */}

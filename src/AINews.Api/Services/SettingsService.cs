@@ -56,7 +56,6 @@ public class SettingsService(AppDbContext db, IDataProtectionProvider dataProtec
     {
         var allKeys = new[]
         {
-            Keys.RedditClientId, Keys.RedditClientSecret, Keys.RedditAccessToken,
             Keys.XAuthToken, Keys.XCsrfToken, Keys.ZAiApiKey, Keys.ZAiBaseUrl,
             Keys.OpenAiApiKey, Keys.GoogleClientId, Keys.GoogleClientSecret
         };

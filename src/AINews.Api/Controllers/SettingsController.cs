@@ -12,8 +12,6 @@ public class SettingsController(SettingsService settings) : ControllerBase
 {
     private static readonly string[] PublicKeys =
     [
-        SettingsService.Keys.RedditClientId,
-        SettingsService.Keys.RedditClientSecret,
         SettingsService.Keys.XAuthToken,
         SettingsService.Keys.XCsrfToken,
         SettingsService.Keys.ZAiApiKey,
