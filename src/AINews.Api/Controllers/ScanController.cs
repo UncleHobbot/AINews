@@ -9,7 +9,6 @@ namespace AINews.Api.Controllers;
 
 [ApiController]
 [Route("api/scan")]
-[Authorize]
 public class ScanController(AppDbContext db, ScanBackgroundService scanner) : ControllerBase
 {
     [HttpPost("trigger")]

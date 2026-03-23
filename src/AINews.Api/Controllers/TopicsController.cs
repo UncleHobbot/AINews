@@ -9,7 +9,6 @@ namespace AINews.Api.Controllers;
 
 [ApiController]
 [Route("api/topics")]
-[Authorize]
 public class TopicsController(AppDbContext db) : ControllerBase
 {
     [HttpGet]

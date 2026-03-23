@@ -11,18 +11,11 @@ public class SettingsService(AppDbContext db, IDataProtectionProvider dataProtec
 
     public static class Keys
     {
-        public const string RedditClientId = "Reddit:ClientId";
-        public const string RedditClientSecret = "Reddit:ClientSecret";
-        public const string RedditAccessToken = "Reddit:AccessToken";
-        public const string RedditRefreshToken = "Reddit:RefreshToken";
-        public const string RedditTokenExpiresAt = "Reddit:TokenExpiresAt";
         public const string XAuthToken = "X:AuthToken";
         public const string XCsrfToken = "X:CsrfToken";
         public const string ZAiApiKey = "ZAi:ApiKey";
         public const string ZAiBaseUrl = "ZAi:BaseUrl";
         public const string OpenAiApiKey = "OpenAi:ApiKey";
-        public const string GoogleClientId = "Google:ClientId";
-        public const string GoogleClientSecret = "Google:ClientSecret";
     }
 
     public async Task<string?> GetAsync(string key)
@@ -56,8 +49,7 @@ public class SettingsService(AppDbContext db, IDataProtectionProvider dataProtec
     {
         var allKeys = new[]
         {
-            Keys.XAuthToken, Keys.XCsrfToken, Keys.ZAiApiKey, Keys.ZAiBaseUrl,
-            Keys.OpenAiApiKey, Keys.GoogleClientId, Keys.GoogleClientSecret
+            Keys.XAuthToken, Keys.XCsrfToken, Keys.ZAiApiKey, Keys.ZAiBaseUrl, Keys.OpenAiApiKey
         };
         var existing = await db.AppSettings
             .Where(s => allKeys.Contains(s.Key) && s.Value != null)
@@ -67,9 +59,6 @@ public class SettingsService(AppDbContext db, IDataProtectionProvider dataProtec
     }
 
     // Typed accessors
-    public async Task<(string? clientId, string? clientSecret)> GetRedditAppCredentialsAsync()
-        => (await GetAsync(Keys.RedditClientId), await GetAsync(Keys.RedditClientSecret));
-
     public async Task<(string? authToken, string? csrfToken)> GetXCredentialsAsync()
         => (await GetAsync(Keys.XAuthToken), await GetAsync(Keys.XCsrfToken));
 

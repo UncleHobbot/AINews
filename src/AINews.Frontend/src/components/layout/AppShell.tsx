@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Newspaper, Rss, Settings, LogOut, Menu } from 'lucide-react'
-import { useAuthStore } from '../../store/authStore'
-import { authApi } from '../../api/auth'
+import { Newspaper, Rss, Settings, Menu } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { topicsApi } from '../../api/topics'
 
@@ -11,16 +9,9 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const { user, setUser } = useAuthStore()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { data: topics = [] } = useQuery({ queryKey: ['topics'], queryFn: topicsApi.list })
-
-  const handleLogout = async () => {
-    await authApi.logout()
-    setUser(null)
-    window.location.href = '/login'
-  }
 
   const navLink = (to: string, icon: React.ReactNode, label: string) => {
     const active = location.pathname === to || location.pathname.startsWith(to + '/')
@@ -59,21 +50,6 @@ export function AppShell({ children }: AppShellProps) {
           {navLink('/settings', <Settings className="w-4 h-4" />, 'Settings')}
         </div>
       </nav>
-
-      <div className="px-4 py-3 border-t border-gray-100">
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-gray-500 truncate max-w-[140px]">
-            {user?.displayName ?? user?.email}
-          </div>
-          <button
-            onClick={handleLogout}
-            className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700"
-            title="Logout"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
     </div>
   )
 

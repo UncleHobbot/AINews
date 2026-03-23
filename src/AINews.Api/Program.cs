@@ -2,14 +2,12 @@ using AINews.Api.BackgroundServices;
 using AINews.Api.Data;
 using AINews.Api.Hubs;
 using AINews.Api.Services;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Data Protection (persisted to volume in production)
+// Data Protection (persisted to volume in production) — used to encrypt settings in DB
 var keysPath = builder.Configuration["DataProtection:KeyPath"]
     .NullIfEmpty() ?? Path.Combine(builder.Environment.ContentRootPath, "keys");
 builder.Services.AddDataProtection()
@@ -21,54 +19,6 @@ var dbPath = builder.Configuration.GetConnectionString("DefaultConnection")
     .NullIfEmpty() ?? $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "data", "ainews.db")}";
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseSqlite(dbPath));
 
-// Authentication
-builder.Services.AddAuthentication(opt =>
-{
-    opt.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    opt.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
-})
-.AddCookie(opt =>
-{
-    opt.Cookie.Name = "ainews.auth";
-    opt.Cookie.HttpOnly = true;
-    opt.Cookie.SameSite = SameSiteMode.Lax;
-    opt.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    opt.Events.OnRedirectToLogin = ctx =>
-    {
-        ctx.Response.StatusCode = 401;
-        return Task.CompletedTask;
-    };
-    opt.Events.OnRedirectToAccessDenied = ctx =>
-    {
-        ctx.Response.StatusCode = 403;
-        return Task.CompletedTask;
-    };
-})
-// Temporary cookie to hold the Google ticket between the OAuth callback and our controller action
-.AddCookie("External", opt =>
-{
-    opt.Cookie.Name = "ainews.external";
-    opt.Cookie.HttpOnly = true;
-    opt.Cookie.SameSite = SameSiteMode.Lax;
-    opt.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    opt.ExpireTimeSpan = TimeSpan.FromMinutes(5);
-})
-.AddGoogle(opt =>
-{
-    opt.ClientId = builder.Configuration["Google:ClientId"].NullIfEmpty() ?? "placeholder";
-    opt.ClientSecret = builder.Configuration["Google:ClientSecret"].NullIfEmpty() ?? "placeholder";
-    opt.SaveTokens = false;
-    opt.CallbackPath = "/api/auth/callback/google";
-    // Store the Google ticket in the temporary external cookie (not the app cookie)
-    // so our controller action can read it and create the proper app session.
-    opt.SignInScheme = "External";
-    // SameSite=Lax allows the correlation cookie to be sent on the cross-site redirect
-    // from Google back to localhost (required — SameSite=None without HTTPS is rejected by browsers).
-    opt.CorrelationCookie.SameSite = SameSiteMode.Lax;
-    opt.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-});
-
-builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 
@@ -89,7 +39,8 @@ builder.Services.AddHttpClient();
 builder.Services.AddCors(opt =>
 {
     opt.AddPolicy("DevCors", p => p
-        .WithOrigins("http://localhost:5173")
+        .WithOrigins("http://localhost:5173", "http://localhost:5174",
+                     "http://localhost:5175", "http://localhost:5176")
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials());
@@ -108,8 +59,6 @@ using (var scope = app.Services.CreateScope())
 
 app.UseCors("DevCors");
 app.UseStaticFiles();
-app.UseAuthentication();
-app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ScanProgressHub>("/hubs/scan");
 

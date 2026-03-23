@@ -9,7 +9,6 @@ namespace AINews.Api.Controllers;
 
 [ApiController]
 [Route("api/sources")]
-[Authorize]
 public class SourcesController(AppDbContext db) : ControllerBase
 {
     private static SourceDto ToDto(Source s) =>
