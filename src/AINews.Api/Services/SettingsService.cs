@@ -16,8 +16,8 @@ public class SettingsService(AppDbContext db, IDataProtectionProvider dataProtec
         public const string RedditAccessToken = "Reddit:AccessToken";
         public const string RedditRefreshToken = "Reddit:RefreshToken";
         public const string RedditTokenExpiresAt = "Reddit:TokenExpiresAt";
-        public const string XBearerToken = "X:BearerToken";
-        public const string XLastSearchAt = "X:LastSearchAt";
+        public const string XAuthToken = "X:AuthToken";
+        public const string XCsrfToken = "X:CsrfToken";
         public const string ZAiApiKey = "ZAi:ApiKey";
         public const string ZAiBaseUrl = "ZAi:BaseUrl";
         public const string OpenAiApiKey = "OpenAi:ApiKey";
@@ -57,8 +57,8 @@ public class SettingsService(AppDbContext db, IDataProtectionProvider dataProtec
         var allKeys = new[]
         {
             Keys.RedditClientId, Keys.RedditClientSecret, Keys.RedditAccessToken,
-            Keys.XBearerToken, Keys.ZAiApiKey, Keys.ZAiBaseUrl, Keys.OpenAiApiKey,
-            Keys.GoogleClientId, Keys.GoogleClientSecret
+            Keys.XAuthToken, Keys.XCsrfToken, Keys.ZAiApiKey, Keys.ZAiBaseUrl,
+            Keys.OpenAiApiKey, Keys.GoogleClientId, Keys.GoogleClientSecret
         };
         var existing = await db.AppSettings
             .Where(s => allKeys.Contains(s.Key) && s.Value != null)
@@ -71,7 +71,8 @@ public class SettingsService(AppDbContext db, IDataProtectionProvider dataProtec
     public async Task<(string? clientId, string? clientSecret)> GetRedditAppCredentialsAsync()
         => (await GetAsync(Keys.RedditClientId), await GetAsync(Keys.RedditClientSecret));
 
-    public async Task<string?> GetXBearerTokenAsync() => await GetAsync(Keys.XBearerToken);
+    public async Task<(string? authToken, string? csrfToken)> GetXCredentialsAsync()
+        => (await GetAsync(Keys.XAuthToken), await GetAsync(Keys.XCsrfToken));
 
     public async Task<(string? apiKey, string? baseUrl)> GetZAiCredentialsAsync()
         => (await GetAsync(Keys.ZAiApiKey), await GetAsync(Keys.ZAiBaseUrl));

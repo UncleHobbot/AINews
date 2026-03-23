@@ -11,7 +11,8 @@ const SETTING_LABELS: Record<string, string> = {
   'Google:ClientSecret': 'Google Client Secret',
   'Reddit:ClientId': 'Reddit Client ID',
   'Reddit:ClientSecret': 'Reddit Client Secret',
-  'X:BearerToken': 'X (Twitter) Bearer Token',
+  'X:AuthToken': 'X Auth Token (auth_token cookie)',
+  'X:CsrfToken': 'X CSRF Token (ct0 cookie)',
   'ZAi:ApiKey': 'Z.ai API Key',
   'ZAi:BaseUrl': 'Z.ai Base URL',
   'OpenAi:ApiKey': 'OpenAI API Key',
@@ -101,6 +102,15 @@ export function SettingsPage() {
                 </div>
               )
             })}
+            <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-700 space-y-1">
+              <p className="font-medium">How to get X Auth Token &amp; CSRF Token:</p>
+              <ol className="list-decimal list-inside space-y-0.5 text-blue-600">
+                <li>Log into x.com in your browser</li>
+                <li>Open DevTools → Application → Cookies → https://x.com</li>
+                <li>Copy <strong>auth_token</strong> value → paste into "X Auth Token"</li>
+                <li>Copy <strong>ct0</strong> value → paste into "X CSRF Token"</li>
+              </ol>
+            </div>
             <div className="pt-2">
               <button
                 onClick={() => saveMutation.mutate()}

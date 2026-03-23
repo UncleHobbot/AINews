@@ -14,7 +14,8 @@ public class SettingsController(SettingsService settings) : ControllerBase
     [
         SettingsService.Keys.RedditClientId,
         SettingsService.Keys.RedditClientSecret,
-        SettingsService.Keys.XBearerToken,
+        SettingsService.Keys.XAuthToken,
+        SettingsService.Keys.XCsrfToken,
         SettingsService.Keys.ZAiApiKey,
         SettingsService.Keys.ZAiBaseUrl,
         SettingsService.Keys.OpenAiApiKey,

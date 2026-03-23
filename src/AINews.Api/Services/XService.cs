@@ -1,105 +1,104 @@
-using System.Net.Http.Headers;
+using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace AINews.Api.Services;
 
 public class XService(SettingsService settings, IHttpClientFactory httpFactory, ILogger<XService> logger)
 {
-    private static readonly TimeSpan CooldownPeriod = TimeSpan.FromMinutes(15);
+    // Public bearer token used by X.com's own web app — same for all users
+    private const string WebBearerToken =
+        "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I4xNbq4=";
 
     public record Tweet(string Id, string Text, string AuthorId, DateTime CreatedAt);
 
-    public async Task<(List<Tweet> Tweets, string? CooldownRemaining)> SearchTweetsAsync(
+    public async Task<(List<Tweet> Tweets, string? Error)> SearchTweetsAsync(
         IEnumerable<string> queries, DateTime? since)
     {
-        // Rate limit gate
-        var lastSearchStr = await settings.GetAsync(SettingsService.Keys.XLastSearchAt);
-        if (lastSearchStr != null && DateTime.TryParse(lastSearchStr, out var lastSearch))
+        var (authToken, csrfToken) = await settings.GetXCredentialsAsync();
+        if (string.IsNullOrEmpty(authToken) || string.IsNullOrEmpty(csrfToken))
         {
-            var elapsed = DateTime.UtcNow - lastSearch;
-            if (elapsed < CooldownPeriod)
-            {
-                var remaining = CooldownPeriod - elapsed;
-                logger.LogWarning("X API cooldown: {Remaining:mm\\:ss} remaining", remaining);
-                return ([], $"{(int)remaining.TotalMinutes}m {remaining.Seconds}s");
-            }
+            logger.LogWarning("X: auth_token or ct0 not configured");
+            return ([], "X credentials not configured — add Auth Token and CSRF Token (ct0) in Settings");
         }
 
-        var bearerToken = await settings.GetXBearerTokenAsync();
-        if (string.IsNullOrEmpty(bearerToken))
-        {
-            logger.LogWarning("X: no bearer token configured");
-            return ([], null);
-        }
-
-        // Batch all queries into one OR compound query
         var queryList = queries.ToList();
         if (!queryList.Any()) return ([], null);
-        var combinedQuery = queryList.Count == 1
+
+        var combined = queryList.Count == 1
             ? queryList[0]
             : string.Join(" OR ", queryList.Select(q => $"({q})"));
 
-        using var http = httpFactory.CreateClient();
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-
-        var urlBuilder = new UriBuilder("https://api.twitter.com/2/tweets/search/recent");
-        var queryParams = new Dictionary<string, string>
-        {
-            ["query"] = combinedQuery,
-            ["max_results"] = "100",
-            ["tweet.fields"] = "created_at,author_id,text",
-        };
         if (since.HasValue)
-            queryParams["start_time"] = since.Value.ToString("yyyy-MM-ddTHH:mm:ssZ");
+            combined += $" since:{since.Value:yyyy-MM-dd}";
 
-        urlBuilder.Query = string.Join("&",
-            queryParams.Select(kv => $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
+        using var http = httpFactory.CreateClient();
+        http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {WebBearerToken}");
+        http.DefaultRequestHeaders.TryAddWithoutValidation("x-csrf-token", csrfToken);
+        http.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"auth_token={authToken}; ct0={csrfToken}");
+        http.DefaultRequestHeaders.TryAddWithoutValidation("x-twitter-active-user", "yes");
+        http.DefaultRequestHeaders.TryAddWithoutValidation("x-twitter-auth-type", "OAuth2Session");
+        http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
 
-        var response = await http.GetAsync(urlBuilder.Uri);
+        var url = "https://twitter.com/i/api/2/search/adaptive.json?" +
+                  $"q={Uri.EscapeDataString(combined)}&tweet_mode=extended&count=100&include_entities=false";
 
-        // Record the search time regardless of success (to respect rate limits)
-        await settings.SetAsync(SettingsService.Keys.XLastSearchAt, DateTime.UtcNow.ToString("O"));
+        var response = await http.GetAsync(url);
 
-        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            logger.LogWarning("X API 429 Too Many Requests");
-            return ([], "15m 0s");
+            logger.LogWarning("X: 401 — session expired");
+            return ([], "X session expired — re-extract auth_token and ct0 from browser cookies");
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogWarning("X API returned {Status}", response.StatusCode);
+            logger.LogWarning("X internal API returned {Status}", response.StatusCode);
             return ([], null);
         }
 
-        var content = await response.Content.ReadAsStringAsync();
-        var result = JsonSerializer.Deserialize<XSearchResponse>(content, _jsonOptions);
-
-        var tweets = result?.Data?
-            .Select(t => new Tweet(
-                t.Id,
-                t.Text,
-                t.AuthorId ?? string.Empty,
-                t.CreatedAt ?? DateTime.UtcNow))
-            .ToList() ?? [];
-
+        var json = await response.Content.ReadAsStringAsync();
+        var tweets = ParseAdaptiveResponse(json);
+        logger.LogInformation("X search '{Query}': {Count} tweets", combined, tweets.Count);
         return (tweets, null);
     }
 
-    private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private List<Tweet> ParseAdaptiveResponse(string json)
+    {
+        var tweets = new List<Tweet>();
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("globalObjects", out var global)) return tweets;
+            if (!global.TryGetProperty("tweets", out var tweetsObj)) return tweets;
 
-    private sealed class XSearchResponse
-    {
-        public List<XTweetData>? Data { get; set; }
+            foreach (var prop in tweetsObj.EnumerateObject())
+            {
+                var t = prop.Value;
+                if (t.TryGetProperty("retweeted_status", out _)) continue; // skip retweets
+
+                var id = t.TryGetProperty("id_str", out var p) ? p.GetString() ?? "" : "";
+                var text = t.TryGetProperty("full_text", out p) ? p.GetString() ?? "" : "";
+                var authorId = t.TryGetProperty("user_id_str", out p) ? p.GetString() ?? "" : "";
+                var dateStr = t.TryGetProperty("created_at", out p) ? p.GetString() : null;
+
+                if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(text))
+                    tweets.Add(new Tweet(id, text, authorId, ParseDate(dateStr)));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to parse X adaptive search response");
+        }
+        return tweets;
     }
-    private sealed class XTweetData
+
+    private static DateTime ParseDate(string? s)
     {
-        public string Id { get; set; } = string.Empty;
-        public string Text { get; set; } = string.Empty;
-        [JsonPropertyName("author_id")]
-        public string? AuthorId { get; set; }
-        [JsonPropertyName("created_at")]
-        public DateTime? CreatedAt { get; set; }
+        // Twitter date format: "Mon Mar 20 12:00:00 +0000 2026"
+        if (s != null && DateTime.TryParseExact(s, "ddd MMM dd HH:mm:ss zzz yyyy",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            return dt.ToUniversalTime();
+        return DateTime.UtcNow;
     }
 }

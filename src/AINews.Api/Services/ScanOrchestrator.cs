@@ -132,10 +132,10 @@ public class ScanOrchestrator(
         var since = sources.Select(s => s.LastScannedAt).Where(d => d.HasValue)
             .Select(d => d!.Value).DefaultIfEmpty(DateTime.UtcNow.AddDays(-1)).Min();
 
-        var (tweets, cooldown) = await xService.SearchTweetsAsync(queries, since);
-        if (cooldown != null)
+        var (tweets, error) = await xService.SearchTweetsAsync(queries, since);
+        if (error != null)
         {
-            logger.LogWarning("X cooldown: {Cooldown}", cooldown);
+            logger.LogWarning("X skipped: {Error}", error);
             return;
         }
 
