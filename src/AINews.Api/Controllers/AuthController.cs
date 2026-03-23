@@ -23,11 +23,15 @@ public class AuthController(AppDbContext db, IConfiguration config) : Controller
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
 
-    [HttpGet("callback/google")]
+    // NOTE: this route must differ from CallbackPath (/api/auth/callback/google) — if they match,
+    // the OAuth middleware re-intercepts the post-login redirect and throws "oauth state missing".
+    [HttpGet("signin")]
     public async Task<IActionResult> GoogleCallback([FromQuery] string? returnUrl = "/")
     {
-        var result = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
+        // Read the Google ticket stored in the temporary external cookie by the OAuth middleware
+        var result = await HttpContext.AuthenticateAsync("External");
         if (!result.Succeeded) return Redirect("/?error=auth_failed");
+        await HttpContext.SignOutAsync("External");
 
         var googleSub = result.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
         var email = result.Principal?.FindFirstValue(ClaimTypes.Email);
@@ -73,7 +77,8 @@ public class AuthController(AppDbContext db, IConfiguration config) : Controller
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity),
             new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30) });
 
-        return Redirect(returnUrl ?? "/");
+        var frontendBase = config["FrontendBaseUrl"].NullIfEmpty() ?? "";
+        return Redirect(frontendBase + (returnUrl ?? "/feed"));
     }
 
     [HttpPost("logout")]
@@ -88,7 +93,8 @@ public class AuthController(AppDbContext db, IConfiguration config) : Controller
     [Authorize]
     public IActionResult Me()
     {
-        var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+            return Unauthorized(); // stale cookie with Google sub instead of internal ID — force re-login
         var email = User.FindFirstValue(ClaimTypes.Email)!;
         var name = User.FindFirstValue(ClaimTypes.Name);
         return Ok(new AuthMeResponse(id, email, name));

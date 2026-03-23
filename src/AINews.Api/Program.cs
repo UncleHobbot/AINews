@@ -44,12 +44,28 @@ builder.Services.AddAuthentication(opt =>
         return Task.CompletedTask;
     };
 })
+// Temporary cookie to hold the Google ticket between the OAuth callback and our controller action
+.AddCookie("External", opt =>
+{
+    opt.Cookie.Name = "ainews.external";
+    opt.Cookie.HttpOnly = true;
+    opt.Cookie.SameSite = SameSiteMode.Lax;
+    opt.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    opt.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+})
 .AddGoogle(opt =>
 {
     opt.ClientId = builder.Configuration["Google:ClientId"].NullIfEmpty() ?? "placeholder";
     opt.ClientSecret = builder.Configuration["Google:ClientSecret"].NullIfEmpty() ?? "placeholder";
     opt.SaveTokens = false;
     opt.CallbackPath = "/api/auth/callback/google";
+    // Store the Google ticket in the temporary external cookie (not the app cookie)
+    // so our controller action can read it and create the proper app session.
+    opt.SignInScheme = "External";
+    // SameSite=Lax allows the correlation cookie to be sent on the cross-site redirect
+    // from Google back to localhost (required — SameSite=None without HTTPS is rejected by browsers).
+    opt.CorrelationCookie.SameSite = SameSiteMode.Lax;
+    opt.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 });
 
 builder.Services.AddAuthorization();
