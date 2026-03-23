@@ -12,6 +12,8 @@ public class NewsItem
     public double Relevance { get; set; }
     public DateTime PublishedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? UserFeedback { get; set; } // null | "Liked" | "Disliked"
+    public DateTime? FeedbackAt { get; set; }
 
     public Source Source { get; set; } = null!;
     public Topic Topic { get; set; } = null!;

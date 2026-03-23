@@ -21,4 +21,7 @@ public record NewsItemDto(
     DateTime PublishedAt,
     string? ExternalUrl,
     string? Author,
-    IEnumerable<ExtractedLinkDto> ExtractedLinks);
+    IEnumerable<ExtractedLinkDto> ExtractedLinks,
+    string? UserFeedback);
+
+public record FeedbackRequest(string? Feedback); // "Liked" | "Disliked" | null

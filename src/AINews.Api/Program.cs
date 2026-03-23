@@ -63,6 +63,7 @@ builder.Services.AddScoped<XService>();
 builder.Services.AddScoped<AiService>();
 builder.Services.AddScoped<LinkExtractorService>();
 builder.Services.AddScoped<ContentFetcherService>();
+builder.Services.AddScoped<PreferenceService>();
 builder.Services.AddScoped<ScanOrchestrator>();
 builder.Services.AddSingleton<ScanBackgroundService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ScanBackgroundService>());

@@ -16,14 +16,22 @@ public class ScanOrchestrator(
     AiService ai,
     LinkExtractorService linkExtractor,
     ContentFetcherService contentFetcher,
+    PreferenceService preferences,
     IHubContext<ScanProgressHub> hub,
     ILogger<ScanOrchestrator> logger)
 {
+    private string? _preferenceContext;
+
     public async Task<int> RunAsync(CancellationToken ct = default)
     {
         var scanRun = new ScanRun { StartedAt = DateTime.UtcNow, Status = "Running" };
         db.ScanRuns.Add(scanRun);
         await db.SaveChangesAsync(ct);
+
+        // Build preference context once per scan from feedback history
+        _preferenceContext = await preferences.BuildContextAsync();
+        if (_preferenceContext != null)
+            logger.LogInformation("Preference context loaded ({Chars} chars)", _preferenceContext.Length);
 
         try
         {
@@ -194,11 +202,12 @@ public class ScanOrchestrator(
         });
         await Task.WhenAll(tasks);
 
-        // AI analysis
+        // AI analysis — pass preference context so the model learns from feedback history
         var analysis = await ai.AnalyzePostAsync(
             raw.Title ?? text[..Math.Min(text.Length, 200)],
             raw.Body,
-            links.Select(l => l.Url));
+            links.Select(l => l.Url),
+            _preferenceContext);
 
         if (analysis == null || !analysis.ShouldInclude)
         {

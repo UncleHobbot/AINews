@@ -23,6 +23,7 @@ export interface NewsItem {
   externalUrl: string | null
   author: string | null
   extractedLinks: ExtractedLink[]
+  userFeedback: 'Liked' | 'Disliked' | null
 }
 
 export interface NewsPage {
@@ -35,4 +36,6 @@ export interface NewsPage {
 export const newsApi = {
   list: (params: { topicId?: number; page?: number; limit?: number; since?: string }) =>
     api.get<NewsPage>('/news', { params }).then((r) => r.data),
+  feedback: (id: number, feedback: 'Liked' | 'Disliked' | null) =>
+    api.patch(`/news/${id}/feedback`, { feedback }),
 }

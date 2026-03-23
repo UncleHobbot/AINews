@@ -1,9 +1,12 @@
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { newsApi } from '../api/news'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { newsApi, type NewsItem } from '../api/news'
 import { scanApi } from '../api/scan'
 import { useSignalR } from '../hooks/useSignalR'
-import { Loader2, RefreshCw, Github, Youtube, FileText, ExternalLink, Zap, Newspaper } from 'lucide-react'
+import {
+  Loader2, RefreshCw, Github, Youtube, FileText, ExternalLink,
+  Zap, Newspaper, ThumbsUp, ThumbsDown,
+} from 'lucide-react'
 import { useState } from 'react'
 import { topicsApi } from '../api/topics'
 
@@ -21,17 +24,54 @@ function linkTypeBg(type: string) {
   return 'bg-green-50 text-green-700'
 }
 
+function FeedbackButtons({ item, onFeedback }: {
+  item: NewsItem
+  onFeedback: (id: number, feedback: 'Liked' | 'Disliked' | null) => void
+}) {
+  const liked = item.userFeedback === 'Liked'
+  const disliked = item.userFeedback === 'Disliked'
+
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <button
+        onClick={() => onFeedback(item.id, liked ? null : 'Liked')}
+        title={liked ? 'Remove like' : 'Like'}
+        className={`p-1.5 rounded-lg transition-colors ${
+          liked
+            ? 'bg-green-100 text-green-600'
+            : 'text-gray-300 hover:text-green-500 hover:bg-green-50'
+        }`}
+      >
+        <ThumbsUp className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => onFeedback(item.id, disliked ? null : 'Disliked')}
+        title={disliked ? 'Remove dislike' : 'Dislike & hide'}
+        className={`p-1.5 rounded-lg transition-colors ${
+          disliked
+            ? 'bg-red-100 text-red-500'
+            : 'text-gray-300 hover:text-red-400 hover:bg-red-50'
+        }`}
+      >
+        <ThumbsDown className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
+
 export function FeedPage() {
   const { topicId } = useParams<{ topicId?: string }>()
   const tid = topicId ? parseInt(topicId) : undefined
   const [scanning, setScanning] = useState(false)
   const { progress } = useSignalR()
+  const qc = useQueryClient()
 
   const { data: topics = [] } = useQuery({ queryKey: ['topics'], queryFn: topicsApi.list })
   const topicName = tid ? topics.find((t) => t.id === tid)?.name : 'All Topics'
 
+  const queryKey = ['news', tid]
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['news', tid],
+    queryKey,
     queryFn: () => newsApi.list({ topicId: tid, limit: 50 }),
   })
 
@@ -44,13 +84,32 @@ export function FeedPage() {
     }
   }
 
-  const isActiveScan =
-    scanning && progress && ['Running'].includes(progress.status)
+  const isActiveScan = scanning && progress && progress.status === 'Running'
   const scanDone = scanning && progress && ['Completed', 'Failed'].includes(progress.status)
-
   if (scanDone && !isActiveScan) {
     setScanning(false)
     refetch()
+  }
+
+  const handleFeedback = async (id: number, feedback: 'Liked' | 'Disliked' | null) => {
+    // Optimistic update — disliked items vanish immediately, liked get highlighted
+    qc.setQueryData(queryKey, (old: typeof data) => {
+      if (!old) return old
+      return {
+        ...old,
+        items: feedback === 'Disliked'
+          // Remove disliked item from view immediately
+          ? old.items.filter((n) => n.id !== id)
+          // Update feedback state for liked/un-liked
+          : old.items.map((n) => n.id === id ? { ...n, userFeedback: feedback } : n),
+      }
+    })
+    try {
+      await newsApi.feedback(id, feedback)
+    } catch {
+      // Revert on failure
+      qc.invalidateQueries({ queryKey })
+    }
   }
 
   return (
@@ -64,11 +123,9 @@ export function FeedPage() {
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium
             rounded-lg hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          {isActiveScan ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <RefreshCw className="w-4 h-4" />
-          )}
+          {isActiveScan
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <RefreshCw className="w-4 h-4" />}
           {isActiveScan ? 'Scanning…' : 'Scan Now'}
         </button>
       </div>
@@ -109,9 +166,16 @@ export function FeedPage() {
       ) : (
         <div className="space-y-4">
           {data.items.map((item) => (
-            <article key={item.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <article
+              key={item.id}
+              className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-colors ${
+                item.userFeedback === 'Liked'
+                  ? 'border-green-200'
+                  : 'border-gray-100'
+              }`}
+            >
               <div className="p-5">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -143,11 +207,14 @@ export function FeedPage() {
                       <h3 className="text-base font-semibold text-gray-900 line-clamp-2">{item.title}</h3>
                     )}
                   </div>
-                  {item.relevance > 0 && (
-                    <div className="shrink-0 text-xs text-gray-400 pt-1">
-                      {Math.round(item.relevance * 100)}%
-                    </div>
-                  )}
+
+                  {/* Feedback buttons + relevance */}
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <FeedbackButtons item={item} onFeedback={handleFeedback} />
+                    {item.relevance > 0 && (
+                      <span className="text-xs text-gray-300">{Math.round(item.relevance * 100)}%</span>
+                    )}
+                  </div>
                 </div>
 
                 {item.aiSummary && (
@@ -199,4 +266,3 @@ export function FeedPage() {
     </div>
   )
 }
-

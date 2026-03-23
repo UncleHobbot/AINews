@@ -16,14 +16,22 @@ public class AiService(SettingsService settings, IHttpClientFactory httpFactory,
 
     public record LinkSummary(string Title, string Summary);
 
-    public async Task<PostAnalysis?> AnalyzePostAsync(string title, string? body, IEnumerable<string> linkUrls)
+    public async Task<PostAnalysis?> AnalyzePostAsync(
+        string title, string? body, IEnumerable<string> linkUrls,
+        string? preferenceContext = null)
     {
         var linksStr = string.Join(", ", linkUrls.Take(5));
-        var prompt = "Analyze this social media post and extract useful information for a developer news feed.\n\n" +
-                     $"Title: {title}\nBody: {body ?? "(no body)"}\nLinks found: {linksStr}\n\n" +
+
+        var prefSection = string.IsNullOrEmpty(preferenceContext)
+            ? ""
+            : $"\nUser preference history (use this to calibrate relevance and shouldInclude):\n{preferenceContext}\n";
+
+        var prompt = "Analyze this social media post and extract useful information for a developer news feed.\n" +
+                     prefSection +
+                     $"\nTitle: {title}\nBody: {body ?? "(no body)"}\nLinks found: {linksStr}\n\n" +
                      "Respond with JSON only:\n" +
                      "{\"summary\":\"2-3 sentence summary\",\"insights\":[\"insight 1\"],\"relevance\":0.7,\"shouldInclude\":true}\n\n" +
-                     "Set shouldInclude=false if the post is off-topic, spam, or has no useful developer content.";
+                     "Set shouldInclude=false if the post is off-topic, spam, or similar to content the user has disliked before.";
 
         var result = await CallAiAsync<PostAnalysisResponse>(prompt);
         if (result == null) return null;
